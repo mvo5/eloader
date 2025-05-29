@@ -51,6 +51,12 @@ class EloaderController:
             return DEFAULT_SLEEP
 
         current_power_charger = self.goe.power / 1000.0
+        # XXX: move to threading? directly in EnergyMon()?
+        try:
+            self.mon._read()
+        except Exception as e:
+            self.log(f"error reading from enery mon: {e}")
+            return DEFAULT_SLEEP
         available_power = -self.mon.current.current_power / 1000.0
         self.last_connect = time.time()
         self.log(
