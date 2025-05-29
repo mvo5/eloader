@@ -1,4 +1,4 @@
-requests==2.22.0
+requests==2.32.3
 pyserial==3.5
 smllib==1.1
 git+https://github.com/mvo5/energymon.git

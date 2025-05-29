@@ -8,16 +8,12 @@ from energymon.energymon import EnergyMon
 
 
 # XXX make configurable
-SOLAR = "192.168.178.155"
 GO_E = "192.168.178.109"
 
-# XXX make configurable
-CITY = "Berlin"
-
+DEFAULT_SLEEP = 60
 
 class EloaderController:
-    def __init__(self, city=CITY):
-        self.city = city
+    def __init__(self):
         self.mon = EnergyMon()
         self.goe = goeapi.GoeAPI(GO_E)
         self.last_connect = 0.0
@@ -30,7 +26,7 @@ class EloaderController:
                 sleeptime = self.tick()
             except OSError as e:
                 print(f"network error {e}")
-                sleeptime = 60
+                sleeptime = DEFAULT_SLEEP
             # wait a bit
             time.sleep(sleeptime)
 
@@ -41,56 +37,18 @@ class EloaderController:
         return datetime.datetime.now()
 
     def manual_overriden(self):
-        # Detect if the the user manually overrode the automatic
-        # settings, e.g. to load faster - just do nothing then until
-        # the car is disconnected.
-        #
-        # Note that the check for 6A/1 phase is needed as a heurisitc for
-        # when the car is plugged in during the night. Then the charger
-        # will immediately start charging with the last setting (6A/1ph)
-        # and we won't detect this because the current_ampere will be "None"
-        # during the night. This means that one cannot manually override
-        # with 6A/1ph but that is a bit of a pointless setting for a manual
-        # override anyway.
-        if self.goe.force_pause:
-            return False
-        if not self.goe.car_connected:
-            return False
-        # heuristic, see above
-        if self.current_ampere == 6 and self.current_phases == 1:
-            return False
-        if self.current_ampere is None:
-            return False
-        # ampere/phases differ from what eloader set, this means
-        # user overrode them
-        return (
-            self.current_ampere != self.goe.ampere
-            or self.current_phases != self.goe.phases
-        )
+        return self.current_phases != 1
 
     def tick(self):
-        # XXX: detect car and do nothing if no car(?)
-        # XXX3: telegram integration?
-        # XXX4: support for 1-3 phases
-
         if self.manual_overriden():
             self.log(
-                "ampere or phases got manually overriden "
-                "got {}/{}, expected {}/{}) sleeping until car "
-                "disconnects".format(
+                "ampere or phases got manually overriden got {}/{} sleeping "
+                "until it goes back to 1 phase ".format(
                     self.goe.ampere,
                     self.goe.phases,
-                    self.current_ampere,
-                    self.current_phases,
                 )
             )
-            return 5 * 60
-
-        # ensure to never overwhelm the API
-        if (time.time() - self.last_connect) < 6 * 60:
-            extra_wait = 6 * 60 - (time.time() - self.last_connect)
-            print(f"api called too often, sleeping for {extra_wait}")
-            return extra_wait
+            return DEFAULT_SLEEP
 
         current_power_charger = self.goe.power
         current_house_power = -self.mon.current.current_power
@@ -100,7 +58,6 @@ class EloaderController:
                 current_house_power, current_power_charger / 1000.0
             )
         )
-        # XXX: deal with 1->3 phase and vice versa
         next_amp = None
         for amp in [6, 10, 12, 14, 16]:
             pw = 220 * amp * self.current_phases / 1000.0
@@ -121,7 +78,7 @@ class EloaderController:
             self.current_ampere = next_amp
         else:
             self.log("staying at {} amp".format(self.current_ampere))
-        return 360
+        return DEFAULT_SLEEP
 
 
 def main():
