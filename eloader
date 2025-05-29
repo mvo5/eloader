@@ -50,12 +50,12 @@ class EloaderController:
             )
             return DEFAULT_SLEEP
 
-        current_power_charger = self.goe.power
-        available_power = -self.mon.current.current_power
+        current_power_charger = self.goe.power / 1000.0
+        available_power = -self.mon.current.current_power / 1000.0
         self.last_connect = time.time()
         self.log(
             "available {} kW / charger {} kW".format(
-                available_power, current_power_charger / 1000.0
+                available_power, current_power_charger
             )
         )
         next_amp = None
