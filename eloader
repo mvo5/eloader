@@ -10,7 +10,7 @@ from energymon.energymon import EnergyMon
 # XXX make configurable
 GO_E = "192.168.178.109"
 
-DEFAULT_SLEEP = 60
+DEFAULT_SLEEP = 5 * 60
 
 class EloaderController:
     def __init__(self):
