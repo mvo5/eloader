@@ -51,17 +51,17 @@ class EloaderController:
             return DEFAULT_SLEEP
 
         current_power_charger = self.goe.power
-        current_house_power = -self.mon.current.current_power
+        available_power = -self.mon.current.current_power
         self.last_connect = time.time()
         self.log(
-            "{} house / charger {} kW".format(
-                current_house_power, current_power_charger / 1000.0
+            "available {} kW / charger {} kW".format(
+                available_power, current_power_charger / 1000.0
             )
         )
         next_amp = None
         for amp in [6, 10, 12, 14, 16]:
             pw = 220 * amp * self.current_phases / 1000.0
-            if pw > current_house_power:
+            if pw > available_power:
                 break
             next_amp = amp
         if self.current_ampere != next_amp:
