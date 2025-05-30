@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import datetime
+import sys
 import time
 
 import goeapi
@@ -84,6 +85,9 @@ class EloaderController:
 
 
 def main():
+    if len(sys.argv) > 1:
+        global DEFAULT_SLEEP
+        DEFAULT_SLEEP = int(sys.argv[1])
     el = EloaderController()
     el.loop()
 
