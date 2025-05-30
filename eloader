@@ -53,7 +53,9 @@ class EloaderController:
         current_power_charger = self.goe.power / 1000.0
         # XXX: move to threading? directly in EnergyMon()?
         try:
-            self.mon._read()
+            # XXX: HAAACK, ensure we drain the current input buffer
+            while self.mon._serial.inWaiting() > 50:
+                self.mon._read()
         except Exception as e:
             self.log(f"error reading from enery mon: {e}")
             return ERROR_SLEEP
