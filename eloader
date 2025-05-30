@@ -43,11 +43,8 @@ class EloaderController:
     def tick(self):
         if self.manual_overriden():
             self.log(
-                "ampere or phases got manually overriden got {}/{} sleeping "
-                "until it goes back to 1 phase ".format(
-                    self.goe.ampere,
-                    self.goe.phases,
-                )
+                f"ampere or phases got manually overriden got {self.goe.ampere}/{self.goe.phases} "
+                "sleeping until it goes back to 1 phase "
             )
             return DEFAULT_SLEEP
 
@@ -61,9 +58,7 @@ class EloaderController:
         available_power = -self.mon.current.current_power / 1000.0
         self.last_connect = time.time()
         self.log(
-            "available {} kW / charger {} kW".format(
-                available_power, current_power_charger
-            )
+            f"available: {available_power} kW, charger: {current_power_charger} kW"
         )
         next_amp = None
         for amp in [6, 10, 12, 14, 16]:
