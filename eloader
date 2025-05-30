@@ -14,6 +14,7 @@ GO_E = "192.168.178.109"
 DEFAULT_SLEEP = 5 * 60
 ERROR_SLEEP = 60
 
+
 class EloaderController:
     def __init__(self):
         self.mon = EnergyMon()
@@ -61,26 +62,23 @@ class EloaderController:
         self.log(
             f"available: {available_power} kW, charger: {current_power_charger} kW"
         )
-        next_amp = None
-        for amp in [6, 10, 12, 14, 16]:
-            pw = 220 * amp * self.current_phases / 1000.0
-            if pw > available_power:
-                break
-            next_amp = amp
-        if self.current_ampere != next_amp:
-            if next_amp is None:
-                self.log("not enough power, forcing pause")
-                self.goe.force_pause = True
-            if next_amp is not None:
+        if available_power < (220 * 6 / 1000.0):
+            self.log("not enough power, forcing pause")
+            self.goe.force_pause = True
+            return DEFAULT_SLEEP
+        for amp in [16, 14, 12, 10, 6]:
+            pw = 220 * amp / 1000.0
+            if pw < available_power:
+                needs_switching = self.current_ampere != amp
+                if needs_switching:
+                    self.goe.ampere = amp
+                    self.current_ampere = amp
                 if self.goe.force_pause:
                     self.log("enough power, un-pause")
                     self.goe.force_pause = False
-                self.goe.ampere = next_amp
-                new_kw = 220 * next_amp * self.current_phases / 1000.0
-                self.log("switched to {} amp ({} kW)".format(next_amp, new_kw))
-            self.current_ampere = next_amp
-        else:
-            self.log("staying at {} amp".format(self.current_ampere))
+                self.log(f"switched: {needs_switching}, amp: {amp}, kW: {pw}")
+                return DEFAULT_SLEEP
+        self.log(f"internal error: should never be reached {available_power!r}")
         return DEFAULT_SLEEP
 
 
