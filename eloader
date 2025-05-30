@@ -11,6 +11,7 @@ from energymon.energymon import EnergyMon
 GO_E = "192.168.178.109"
 
 DEFAULT_SLEEP = 5 * 60
+ERROR_SLEEP = 60
 
 class EloaderController:
     def __init__(self):
@@ -56,7 +57,7 @@ class EloaderController:
             self.mon._read()
         except Exception as e:
             self.log(f"error reading from enery mon: {e}")
-            return DEFAULT_SLEEP
+            return ERROR_SLEEP
         available_power = -self.mon.current.current_power / 1000.0
         self.last_connect = time.time()
         self.log(
