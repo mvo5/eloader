@@ -12,7 +12,7 @@ from sml import EnergyMon
 GO_E = "192.168.178.109"
 
 DEFAULT_SLEEP = 5 * 60
-ERROR_SLEEP = 60
+ERROR_SLEEP = 6
 
 
 class EloaderController:
