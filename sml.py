@@ -40,7 +40,7 @@ class EnergyStats:
 
 class EnergyMon:
     def __init__(self, serial_device: str = "/dev/ttyUSB0"):
-        self._serial = serial.Serial(serial_device, 9600)
+        self._serial = serial.Serial(serial_device, 9600, timeout=1)
         self._current: Optional[EnergyStats] = None
         self._stream = SmlStreamReader()
 
@@ -53,7 +53,7 @@ class EnergyMon:
 
     def read(self):
         while True:
-            data = self._serial.read(512)
+            data = self._serial.read(4096)
             self._stream.add(data)
             while True:
                 # read all frames in buffer, not just current
