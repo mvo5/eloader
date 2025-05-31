@@ -56,7 +56,9 @@ class EloaderController:
         except Exception as e:
             self.log(f"error reading from enery mon: {e}")
             return ERROR_SLEEP
-        available_power = -self.mon.current.current_power / 1000.0
+        available_power = (-self.mon.current.current_power / 1000.0)
+        # add the charger to the available (sun) power
+        available_power += current_power_charger
         self.last_connect = time.time()
         self.log(
             f"available: {available_power} kW, charger: {current_power_charger} kW"
