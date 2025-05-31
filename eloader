@@ -5,7 +5,7 @@ import sys
 import time
 
 import goeapi
-from energymon.energymon import EnergyMon
+from sml import EnergyMon
 
 
 # XXX make configurable
@@ -51,11 +51,8 @@ class EloaderController:
             return DEFAULT_SLEEP
 
         current_power_charger = self.goe.power / 1000.0
-        # XXX: move to threading? directly in EnergyMon()?
         try:
-            # XXX: HAAACK, ensure we drain the current input buffer
-            while self.mon._serial.inWaiting() > 50:
-                self.mon._read()
+            self.mon.read()
         except Exception as e:
             self.log(f"error reading from enery mon: {e}")
             return ERROR_SLEEP
