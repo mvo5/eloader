@@ -53,15 +53,18 @@ class EnergyMon:
 
     def read(self):
         while True:
-            # we will always lack a little bit behind by just reading the first frame
-            # but its just seconds so it should not matter
             data = self._serial.read(512)
             self._stream.add(data)
-            sml_frame = self._stream.get_frame()
-            if sml_frame is None:
-                print("sml: no data")
-                time.sleep(0.1)
-                continue
-            self._current = EnergyStats(sml_frame)
-            print(f"got sml frame: {self._current}")
-            return
+            while True:
+                # read all frames in buffer, not just current
+                sml_frame = self._stream.get_frame()
+                if sml_frame is None:
+                    print("sml: no data")
+                    if self._current is None:
+                        time.sleep(0.1)
+                        data = self._serial.read(512)
+                        self._stream.add(data)
+                        continue
+                    return
+                self._current = EnergyStats(sml_frame)
+                print(f"got sml frame: {self._current}")
