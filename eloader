@@ -61,7 +61,7 @@ class EloaderController:
         available_power += current_power_charger
         self.last_connect = time.time()
         self.log(
-            f"available: {available_power} kW, charger: {current_power_charger} kW"
+            f"available: {available_power:.2f} kW, charger: {current_power_charger} kW"
         )
         if available_power < (230 * 6 / 1000.0):
             self.log("not enough power, forcing pause")
