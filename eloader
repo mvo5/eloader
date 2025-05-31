@@ -63,12 +63,12 @@ class EloaderController:
         self.log(
             f"available: {available_power} kW, charger: {current_power_charger} kW"
         )
-        if available_power < (220 * 6 / 1000.0):
+        if available_power < (230 * 6 / 1000.0):
             self.log("not enough power, forcing pause")
             self.goe.force_pause = True
             return DEFAULT_SLEEP
         for amp in [16, 14, 12, 10, 6]:
-            pw = 220 * amp / 1000.0
+            pw = 230 * amp / 1000.0
             if pw < available_power:
                 needs_switching = self.current_ampere != amp
                 if needs_switching:
