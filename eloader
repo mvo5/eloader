@@ -20,7 +20,6 @@ class EloaderController:
         self.mon = EnergyMon()
         self.goe = goeapi.GoeAPI(GO_E)
         self.last_connect = 0.0
-        self.current_phases = self.goe.phases
         self.current_ampere = self.goe.ampere
 
     def loop(self):
@@ -40,7 +39,7 @@ class EloaderController:
         return datetime.datetime.now()
 
     def manual_overriden(self):
-        return self.current_phases != 1
+        return self.goe.phases != 1
 
     def tick(self):
         if self.manual_overriden():
