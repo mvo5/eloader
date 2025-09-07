@@ -1,5 +1,4 @@
-requests==2.22.0
-pymodbus==2.1.0
-astral==1.6
-git+https://github.com/mvo5/solarmax-smt.git
+requests==2.32.3
+pyserial==3.5
+smllib==1.7
 git+https://github.com/mvo5/goe-py.git

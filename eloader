@@ -1,30 +1,25 @@
 #!/usr/bin/python3
 
 import datetime
+import sys
 import time
 
-
-import astral
-
 import goeapi
-import smaxsmt
+from sml import EnergyMon
 
 
 # XXX make configurable
-SOLAR = "192.168.178.155"
-GO_E = "192.168.178.109"
+GO_E = "192.168.178.40"
 
-# XXX make configurable
-CITY = "Berlin"
+DEFAULT_SLEEP = 6 * 60
+ERROR_SLEEP = 6
 
 
 class EloaderController:
-    def __init__(self, city=CITY):
-        self.city = city
-        self.smax = smaxsmt.SolarmaxSmt(SOLAR)
+    def __init__(self):
+        self.mon = EnergyMon()
         self.goe = goeapi.GoeAPI(GO_E)
-        self.last_solarmax_connect = 0.0
-        self.current_phases = self.goe.phases
+        self.last_connect = 0.0
         self.current_ampere = self.goe.ampere
 
     def loop(self):
@@ -33,10 +28,8 @@ class EloaderController:
                 sleeptime = self.tick()
             except OSError as e:
                 print(f"network error {e}")
-                sleeptime = 60
+                sleeptime = DEFAULT_SLEEP
             # wait a bit
-            # empirically anything less than 360s here will mean no more
-            # data is sent to maxmonitoring.solarmax.com for unknown reasons
             time.sleep(sleeptime)
 
     def log(self, *args):
@@ -46,124 +39,53 @@ class EloaderController:
         return datetime.datetime.now()
 
     def manual_overriden(self):
-        # Detect if the the user manually overrode the automatic
-        # settings, e.g. to load faster - just do nothing then until
-        # the car is disconnected.
-        #
-        # Note that the check for 6A/1 phase is needed as a heurisitc for
-        # when the car is plugged in during the night. Then the charger
-        # will immediately start charging with the last setting (6A/1ph)
-        # and we won't detect this because the current_ampere will be "None"
-        # during the night. This means that one cannot manually override
-        # with 6A/1ph but that is a bit of a pointless setting for a manual
-        # override anyway.
-        if self.goe.force_pause:
-            return False
-        if not self.goe.car_connected:
-            return False
-        # heuristic, see above
-        if self.current_ampere == 6 and self.current_phases == 1:
-            return False
-        if self.current_ampere is None:
-            return False
-        # ampere/phases differ from what eloader set, this means
-        # user overrode them
-        return (
-            self.current_ampere != self.goe.ampere
-            or self.current_phases != self.goe.phases
-        )
-
-    def night_time(self):
-        a = astral.Astral()
-        city = a[self.city]
-        sun = city.sun(date=self.now().date())
-        sunrise = sun["sunrise"].time()
-        sunset = sun["sunset"].time()
-        now = self.now().time()
-        return now > sunset or now < sunrise
+        return self.goe.phases != 1
 
     def tick(self):
-        # XXX: detect car and do nothing if no car(?)
-        # XXX3: telegram integration?
-        # XXX4: support for 1-3 phases
-
         if self.manual_overriden():
             self.log(
-                "ampere or phases got manually overriden "
-                "got {}/{}, expected {}/{}) sleeping until car "
-                "disconnects".format(
-                    self.goe.ampere,
-                    self.goe.phases,
-                    self.current_ampere,
-                    self.current_phases,
-                )
+                f"ampere or phases got manually overriden got {self.goe.ampere}/{self.goe.phases} "
+                "sleeping until it goes back to 1 phase "
             )
-            return 5 * 60
+            return DEFAULT_SLEEP
 
-        # ensure to never overwhelm the solarmax API
-        if (time.time() - self.last_solarmax_connect) < 6 * 60:
-            extra_wait = 6 * 60 - (time.time() - self.last_solarmax_connect)
-            print(f"solarmax api called too often, sleeping for {extra_wait}")
-            return extra_wait
-
-        # sleep *long* in the night and ensure that we not accidentally load
-        if self.night_time():
-            self.log("night mode, sleeping for 10min")
-            if not self.goe.force_pause:
-                self.log("evening mode: force pause (wasn't already?)")
-                self.goe.force_pause = True
-            return 10 * 60
-
-        current_power_charger = self.goe.power
+        current_power_charger = self.goe.power / 1000.0
         try:
-            current_solar_power = self.smax.current_power
-            self.last_solarmax_connect = time.time()
-        except (smaxsmt.ModbusConnectionError, AttributeError):
-            # XXX: deal with the attribute error in the high layers
-            #
-            # Traceback (most recent call last):
-            #  File "/snap/eloader-mvo/56/bin/eloader", line 35, in <module>
-            #    current_solar_power = smax.current_power
-            #  File "/.../smaxsmt.py", line 62, in current_power
-            #    return self._get(reg)
-            #  File "/.../smaxsmt.py", line 55, in _get
-            #    val = reg.output(mc)
-            #  File "/.../smaxsmt.py", line 20, in output
-            #    if len(reg.registers) == 1:
-            # AttributeError: 'ModbusIOException' object has no attribute 'registers'
-            RETRY_WAIT = 60
-            self.log("cannot connect, will retry in {}s".format(RETRY_WAIT))
-            return RETRY_WAIT
+            self.mon.read()
+        except Exception as e:
+            self.log(f"error reading from enery mon: {e}")
+            return ERROR_SLEEP
+        available_power = (-self.mon.current.current_power / 1000.0)
+        # add the charger to the available (sun) power
+        available_power += current_power_charger
+        self.last_connect = time.time()
         self.log(
-            "{} solar / charger {} kW".format(
-                current_solar_power, current_power_charger / 1000.0
-            )
+            f"available: {available_power:.2f} kW, charger: {current_power_charger} kW"
         )
-        # XXX: deal with 1->3 phase and vice versa
-        next_amp = None
-        for amp in [6, 10, 12, 14, 16]:
-            pw = 220 * amp * self.current_phases / 1000.0
-            if pw > current_solar_power:
-                break
-            next_amp = amp
-        if self.current_ampere != next_amp:
-            if next_amp is None:
-                self.log("not enough power, forcing pause")
-                self.goe.force_pause = True
-            if next_amp is not None:
+        if available_power < (230 * 6 / 1000.0):
+            self.log("not enough power, forcing pause")
+            self.goe.force_pause = True
+            return DEFAULT_SLEEP
+        for amp in [16, 14, 12, 10, 6]:
+            pw = 230 * amp / 1000.0
+            if pw < available_power:
+                needs_switching = self.current_ampere != amp
+                if needs_switching:
+                    self.goe.ampere = amp
+                    self.current_ampere = amp
                 if self.goe.force_pause:
                     self.log("enough power, un-pause")
                     self.goe.force_pause = False
-                self.goe.ampere = next_amp
-                new_kw = 220 * next_amp * self.current_phases / 1000.0
-                self.log("switched to {} amp ({} kW)".format(next_amp, new_kw))
-            self.current_ampere = next_amp
-        else:
-            self.log("staying at {} amp".format(self.current_ampere))
-        return 360
+                self.log(f"switched: {needs_switching}, amp: {amp}, kW: {pw}")
+                return DEFAULT_SLEEP
+        self.log(f"internal error: should never be reached {available_power!r}")
+        return DEFAULT_SLEEP
 
 
 def main():
+    if len(sys.argv) > 1:
+        global DEFAULT_SLEEP
+        DEFAULT_SLEEP = int(sys.argv[1])
     el = EloaderController()
     el.loop()
 

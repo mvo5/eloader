@@ -1,0 +1,13 @@
+[Unit]
+Description="Control the go-e charger based on available solar power"
+After=network.target
+
+[Service]
+User=mvogt
+WorkingDirectory=/home/mvogt/devel/eloader
+ExecStart=/home/mvogt/devel/eloader/venv/bin/python3 /home/mvogt/devel/eloader/eloader
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
