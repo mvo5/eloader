@@ -9,9 +9,9 @@ from sml import EnergyMon
 
 
 # XXX make configurable
-GO_E = "192.168.178.109"
+GO_E = "192.168.178.40"
 
-DEFAULT_SLEEP = 5 * 60
+DEFAULT_SLEEP = 6 * 60
 ERROR_SLEEP = 6
 
 

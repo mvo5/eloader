@@ -7,6 +7,7 @@ import time
 
 import serial
 
+import smllib.errors
 from smllib import SmlStreamReader, SmlFrame
 from smllib.const import UNITS
 
@@ -40,7 +41,7 @@ class EnergyStats:
 
 class EnergyMon:
     def __init__(self, serial_device: str = "/dev/ttyUSB0"):
-        self._serial = serial.Serial(serial_device, 9600, timeout=1)
+        self._serial_device = serial_device
         self._current: Optional[EnergyStats] = None
         self._stream = SmlStreamReader()
 
@@ -49,22 +50,28 @@ class EnergyMon:
         return self._current
 
     def stop(self):
-        self._serial.close()
+        # nothing
+        pass
 
     def read(self):
-        while True:
-            data = self._serial.read(4096)
+        """
+        Read will open the device and read a single sml frame,
+        its not meant to use frequently.
+        """
+        with serial.Serial(self._serial_device, 9600) as ser:
+            data = ser.read(512)
             self._stream.add(data)
             while True:
-                # read all frames in buffer, not just current
-                sml_frame = self._stream.get_frame()
+                try:
+                    sml_frame = self._stream.get_frame()
+                except smllib.errors.CrcError as e:
+                    print(f"{type(e)}, keep reading")
+                    sml_frame = None
                 if sml_frame is None:
-                    print("sml: no data")
-                    if self._current is None:
-                        time.sleep(0.1)
-                        data = self._serial.read(512)
-                        self._stream.add(data)
-                        continue
-                    return
+                    print("no sml_frame, keep reading")
+                    data = ser.read(512)
+                    self._stream.add(data)
+                    continue
                 self._current = EnergyStats(sml_frame)
                 print(f"got sml frame: {self._current}")
+                return
