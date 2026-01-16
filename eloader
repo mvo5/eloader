@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 
 import datetime
+import json
+import socket
 import sys
 import time
 
 import goeapi
-from sml import EnergyMon
 
 
 # XXX make configurable
@@ -15,9 +16,41 @@ DEFAULT_SLEEP = 6 * 60
 ERROR_SLEEP = 6
 
 
+class ShellyMonitor:
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
+
+    @property
+    def current_power(self):
+        payload = {
+            "id": 1,
+            "src": "python_script",
+            "method": "EM1.GetStatus",
+            "params": {"id": 0}
+        }
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(5.0)
+
+        try:
+            message = json.dumps(payload).encode('utf-8')
+            print(f"Sending request to {self.ip}:{self.port}...")
+            sock.sendto(message, (self.ip, self.port))
+            data, addr = sock.recvfrom(4096)
+            res = json.loads(data.decode('utf-8'))
+            return res["result"]["act_power"]
+        except socket.timeout:
+            print("Error: Request timed out. Ensure UDP is enabled on the Shelly.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            sock.close()
+        return 0
+
+
 class EloaderController:
     def __init__(self):
-        self.mon = EnergyMon()
+        self.mon = ShellyMonitor("192.168.178.30", port=2222)
         self.goe = goeapi.GoeAPI(GO_E)
         self.last_connect = 0.0
         self.current_ampere = self.goe.ampere
@@ -50,12 +83,7 @@ class EloaderController:
             return DEFAULT_SLEEP
 
         current_power_charger = self.goe.power / 1000.0
-        try:
-            self.mon.read()
-        except Exception as e:
-            self.log(f"error reading from enery mon: {e}")
-            return ERROR_SLEEP
-        available_power = (-self.mon.current.current_power / 1000.0)
+        available_power = (-self.mon.current_power / 1000.0)
         # add the charger to the available (sun) power
         available_power += current_power_charger
         self.last_connect = time.time()
