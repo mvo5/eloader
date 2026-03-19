@@ -6,11 +6,14 @@ import socket
 import sys
 import time
 
+from pymodbus.client import ModbusTcpClient
+
 import goeapi
 
 
 # XXX make configurable
 GO_E = "192.168.178.40"
+MARSTEK = "192.168.178.149"
 
 DEFAULT_SLEEP = 6 * 60
 ERROR_SLEEP = 6
@@ -48,9 +51,29 @@ class ShellyMonitor:
         return 0
 
 
+class MarstekMonitor:
+    def __init__(self, ip):
+        self.ip = ip
+
+    @property
+    def ac_power(self):
+        """Return ac-power in watts from register 30006 (int16)."""
+        from pymodbus.constants import Endian
+        from pymodbus.payload import BinaryPayloadDecoder
+        client = ModbusTcpClient(host=self.ip)
+        try:
+            client.connect()
+            reg = client.read_holding_registers(30006)
+            decoder = BinaryPayloadDecoder.fromRegisters(reg.registers, byteorder=Endian.BIG)
+            return decoder.decode_16bit_int()
+        finally:
+            client.close()
+
+
 class EloaderController:
     def __init__(self):
         self.mon = ShellyMonitor("192.168.178.30", port=2222)
+        self.marstek = MarstekMonitor(MARSTEK)
         self.goe = goeapi.GoeAPI(GO_E)
         self.last_connect = 0.0
         self.current_ampere = self.goe.ampere
@@ -86,9 +109,18 @@ class EloaderController:
         available_power = (-self.mon.current_power / 1000.0)
         # add the charger to the available (sun) power
         available_power += current_power_charger
+        # normalize available power by removing the marstek contribution:
+        # - when charging (ac_power < 0): subtracting negative adds it
+        #   back, i.e. that power is available for the car instead
+        # - when discharging (ac_power > 0): subtracting positive removes
+        #   the battery power that inflates the shelly grid reading
+        # this gives us the true solar surplus (solar - house)
+        marstek_power = self.marstek.ac_power
+        available_power -= marstek_power / 1000.0
         self.last_connect = time.time()
         self.log(
-            f"available: {available_power:.2f} kW, charger: {current_power_charger} kW"
+            f"available: {available_power:.2f} kW, charger: {current_power_charger} kW, "
+            f"marstek: {marstek_power} W ({marstek_power / 1000.0:.2f} kW)"
         )
         if available_power < (230 * 6 / 1000.0):
             self.log("not enough power, forcing pause")

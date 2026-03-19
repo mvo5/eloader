@@ -1,3 +1,4 @@
 requests==2.32.3
 pyserial==3.5
+pymodbus==3.6.9
 git+https://github.com/mvo5/goe-py.git
